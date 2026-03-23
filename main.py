@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from database import engine, Base
+from configs.database import engine, Base
 
 import models.users
 import models.users_notifications

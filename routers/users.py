@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 
-from database import get_db
+from configs.database import get_db
 from models.users import Users
-from auth import AuthService
+from configs.auth import AuthService
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -21,7 +21,7 @@ class UsersOut(BaseModel):
     avatar:      Optional[str]
     created_at:  datetime
 
-    model_config = {"from_attributes": True}
+    #model_config = {"from_attributes": True}
 
 
 class UsersCreate(BaseModel):
@@ -45,29 +45,17 @@ class UsersUpdate(BaseModel):
 
 @router.get("/", response_model=list[UsersOut], summary="รายการ users")
 def list_users(
-    name:      Optional[str] = Query(None),
-    user_name: Optional[str] = Query(None),
-    email:     Optional[str] = Query(None),
-    status:    Optional[str] = Query(None),
     page:      Optional[int] = Query(None, ge=1),
     limit:     Optional[int] = Query(None, ge=1, le=100),
     db:           Session = Depends(get_db),
     current_user: Users   = Depends(AuthService.get_current_user),
 ):
     query = db.query(Users).filter(Users.deleted_at == None)
-
-    if name:      query = query.filter(Users.name.ilike(f"%{name}%"))
-    if user_name: query = query.filter(Users.user_name.ilike(f"%{user_name}%"))
-    if email:     query = query.filter(Users.email.ilike(f"%{email}%"))
-    if status:    query = query.filter(Users.status == status)
-
-    # ✅ order_by() ก่อนเสมอ แล้วค่อย offset/limit
+    
     query = query.order_by(Users.id.desc())
 
     if page is not None and limit is not None:
         query = query.offset((page - 1) * limit).limit(limit)
-    elif limit is not None:
-        query = query.limit(limit)
 
     return query.all()
 
@@ -95,7 +83,7 @@ def create_user(
     db:           Session = Depends(get_db),
     current_user: Users   = Depends(AuthService.get_current_user),
 ):
-    if db.query(Users).filter(Users.email == body.email).first():  # ✅ Users.email
+    if db.query(Users).filter(Users.email == body.email).first():
         raise HTTPException(status_code=400, detail="Email นี้ถูกใช้งานแล้ว")
 
     users = Users(
@@ -162,21 +150,18 @@ def delete_user(
 ):
     user = db.query(Users).filter(Users.id == user_id).first()
 
-    # ❌ ไม่เจอ user
     if not user:
         raise HTTPException(
             status_code=404,
             detail=f"ไม่พบ user id={user_id}"
         )
 
-    # ❌ กันลบตัวเอง (optional แต่แนะนำ)
     if user.id == current_user.id:
         raise HTTPException(
             status_code=400,
             detail="ไม่สามารถลบ user ของตัวเองได้"
         )
 
-    # 🔥 ลบจริง
     db.delete(user)
     db.commit()
 

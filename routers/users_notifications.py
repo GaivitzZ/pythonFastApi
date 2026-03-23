@@ -7,10 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
-from database import get_db
+from configs.database import get_db
 from models.users import Users
 from models.users_notifications import UsersNotifications
-from auth import AuthService
+from configs.auth import AuthService
 from sqlalchemy import text
 
 router = APIRouter(prefix="/users_notifications", tags=["UserNotifications"])
@@ -62,34 +62,20 @@ def generate_notification_code() -> str:
     return f"N{timestamp}-{random_part}"
 
 
-
 @router.get("/", response_model=list[UsersNotificationsOut], summary="รายการแจ้งเตือนแบบแบ่งหน้า")
 def list_notifications(
-    name:      Optional[str] = Query(None),
-    user_name: Optional[str] = Query(None),
-    email:     Optional[str] = Query(None),
-    status:    Optional[str] = Query(None),
     page:      Optional[int] = Query(None, ge=1),
     limit:     Optional[int] = Query(None, ge=1, le=100),
     db:           Session = Depends(get_db),
     current_user: Users   = Depends(AuthService.get_current_user),
 ):
     query = db.query(UsersNotifications).filter(UsersNotifications.deleted_at == None)
-
-    if name:      query = query.filter(UsersNotifications.name.ilike(f"%{name}%"))
-    if user_name: query = query.filter(UsersNotifications.user_name.ilike(f"%{user_name}%"))
-    if email:     query = query.filter(UsersNotifications.email.ilike(f"%{email}%"))
-    if status:    query = query.filter(UsersNotifications.status == status)
-
     query = query.order_by(UsersNotifications.id.desc())
 
     if page is not None and limit is not None:
         query = query.offset((page - 1) * limit).limit(limit)
-    elif limit is not None:
-        query = query.limit(limit)
 
     return query.all()
-
 
 
 @router.get("/{notif_id}", response_model=UsersNotificationsOut, summary="ดึง notification รายการเดียว")
@@ -107,7 +93,6 @@ def get_notification(
         raise HTTPException(status_code=404, detail=f"ไม่พบ notification id={notif_id}")
 
     return notif
-
 
 
 @router.post("/", response_model=UsersNotificationsOut, status_code=status.HTTP_201_CREATED, summary="สร้าง notification")
@@ -155,7 +140,6 @@ def create_notification(
     return notif
 
 
-
 @router.put("/{notif_id}", response_model=UsersNotificationsOut, summary="อัปเดต notification แบบเต็ม (PUT)")
 def update_notification_full(
     notif_id:     int,
@@ -188,7 +172,6 @@ def update_notification_full(
     db.commit()
     db.refresh(notif)
     return notif
-
 
 
 @router.patch("/{notif_id}", response_model=UsersNotificationsOut, summary="อัปเดตบางส่วน (PATCH)")
@@ -225,8 +208,6 @@ def patch_notification(
 
     return notif
 
-
-# ─────────────────────────────────────────────
 
 @router.delete("/{notif_id}", status_code=status.HTTP_200_OK, summary="ลบ notification (hard delete)")
 def delete_notification(
