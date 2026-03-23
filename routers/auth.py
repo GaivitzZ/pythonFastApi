@@ -4,7 +4,7 @@ from pydantic import BaseModel, EmailStr
 
 from configs.database import get_db
 from models.users import Users
-from configs.auth import AuthService
+from configs.auth import AuthService   # ตรงนี้ต้อง import ให้ถูก
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -17,8 +17,9 @@ class RegisterIn(BaseModel):
 
 
 class TokenOut(BaseModel):
-    access_token: str
-    token_type:   str = "bearer"
+    access_token:   str
+    remember_token: str
+    token_type:     str = "bearer"
 
 
 class LoginIn(BaseModel):
@@ -29,7 +30,7 @@ class LoginIn(BaseModel):
 @router.post("/register", status_code=status.HTTP_201_CREATED, summary="สมัครสมาชิก")
 def register(body: RegisterIn, db: Session = Depends(get_db)):
     if db.query(Users).filter(Users.email == body.email).first():
-        raise HTTPException(status_code=400, detail="Email นี้ถูกใช้งานแล้ว")
+        raise HTTPException(status_code=400, detail="Email หรือ Username นี้ถูกใช้งานแล้ว")
 
     users = Users(
         name=body.name,
@@ -46,12 +47,19 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenOut, summary="เข้าสู่ระบบ")
 def login(body: LoginIn, db: Session = Depends(get_db)):
-    users = db.query(Users).filter(
-        Users.user_name == body.username,
+    user = db.query(Users).filter(
+        Users.user_name  == body.username,
         Users.deleted_at == None,
     ).first()
-    if not users or not AuthService.verify_password(body.password, users.password):
+    
+    if not user or not AuthService.verify_password(body.password, user.password):
         raise HTTPException(status_code=401, detail="Username หรือ Password ไม่ถูกต้อง")
 
-    token = AuthService.create_access_token(data={"sub": str(users.id)})
-    return {"access_token": token}
+    access_token = AuthService.create_access_token(data={'gaivitzZ_secret': str(user.id)})
+    remember_token = AuthService.save_remember_token(user.id, db)
+
+    return TokenOut(
+        access_token   = access_token,
+        remember_token = remember_token,
+        token_type     = "bearer"
+    )
