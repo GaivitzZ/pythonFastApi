@@ -39,4 +39,5 @@ class Users(Base):
     privacy_policies_acknowledge    = Column(DateTime(timezone=True), nullable=True)
     privacy_policies_agree          = Column(String(255), nullable=True)
 
-    notifications = relationship("UsersNotifications", back_populates="user")
+    #notifications = relationship("UsersNotifications", back_populates="user")
+    #test_name = Column()

@@ -55,7 +55,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
     if not user or not AuthService.verify_password(body.password, user.password):
         raise HTTPException(status_code=401, detail="Username หรือ Password ไม่ถูกต้อง")
 
-    access_token = AuthService.create_access_token(data={'gaivitzZ_secret': str(user.id)})
+    access_token = AuthService.create_access_token(data={'sub': str(user.id)})
     remember_token = AuthService.save_remember_token(user.id, db)
 
     return TokenOut(

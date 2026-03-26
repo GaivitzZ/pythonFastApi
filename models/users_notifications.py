@@ -35,4 +35,4 @@ class UsersNotifications(Base):
     message_alert_expired = Column(DateTime(timezone=True), nullable=True)
     users_fullname        = Column(String(500), nullable=True)
 
-    user = relationship("Users", back_populates="notifications")
+    #user = relationship("Users", back_populates="notifications")

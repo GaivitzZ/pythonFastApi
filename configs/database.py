@@ -14,17 +14,43 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-engine = create_engine(settings.DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
+# ✅ 1. DATABASE POOL CONFIG
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_size=10,          # จำนวน connection หลัก
+    max_overflow=20,       # connection ที่เพิ่มได้ชั่วคราว
+    pool_timeout=30,       # รอ connection (วินาที)
+    pool_recycle=1800,     # reset connection ทุก 30 นาที
+    pool_pre_ping=True     # เช็ค connection ก่อนใช้ (กัน connection ตาย)
+)
+
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    autocommit=False,
+    autoflush=False
+)
 
 
 class Base(DeclarativeBase):
     pass
 
 
+# ✅ 2. TRANSACTION MANAGEMENT
 def get_db():
     db = SessionLocal()
     try:
-        yield db
+        print("📊 POOL STATUS:", engine.pool.status())
+        print("⏳ Waiting for transaction...")
+        yield db   # 👉 transaction จะเริ่มตอนมี query ครั้งแรก
+        print("💾 Trying COMMIT...")
+        db.commit()
+        print('✅ COMMITTED')
+    except Exception as e:
+        print("🚨 ERROR OCCURRED:", str(e))
+        print("↩️ Rolling back...")
+        db.rollback()
+        raise
     finally:
+        print("🔚 Closing DB session")
         db.close()

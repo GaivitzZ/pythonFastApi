@@ -7,3 +7,6 @@ bcrypt
 pydantic-settings
 pydantic[email]
 python-multipart
+reportlab
+openpyxl
+python-docx
