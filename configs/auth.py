@@ -1,14 +1,16 @@
 from datetime import datetime, timedelta
 from typing import Optional
 import bcrypt
+import secrets
+
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from configs.database import get_db, settings
 from models.users import Users
-import secrets
 
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -30,11 +32,13 @@ class AuthService:
         to_encode["exp"] = expire
         return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
-    def save_remember_token(user_id: int | str, db: Session):
+    async def save_remember_token(user_id: int | str, db: AsyncSession):
         expires_in_days = 30
         expire_at = datetime.utcnow() + timedelta(days=expires_in_days)
         remember_token = secrets.token_urlsafe(64)
-        user = db.query(Users).filter(Users.id == int(user_id)).first()
+
+        result = await db.execute(select(Users).where(Users.id == int(user_id)))
+        user = result.scalar_one_or_none()
 
         if not user:
             raise ValueError("User not found")
@@ -43,12 +47,12 @@ class AuthService:
         user.effective_date = datetime.utcnow()
         user.expired_date = expire_at
 
-        db.commit()
+        await db.flush()
         return remember_token
 
-    def get_current_user(
+    async def get_current_user(
         token: str = Depends(oauth2_scheme),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_db),
     ):
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -63,10 +67,13 @@ class AuthService:
         except JWTError:
             raise credentials_exception
 
-        user = db.query(Users).filter(
-            Users.id == int(user_id),
-            Users.deleted_at == None,
-        ).first()
+        result = await db.execute(
+            select(Users).where(
+                Users.id == int(user_id),
+                Users.deleted_at == None,
+            )
+        )
+        user = result.scalar_one_or_none()
         if not user:
             raise credentials_exception
         return user

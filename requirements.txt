@@ -10,3 +10,5 @@ python-multipart
 reportlab
 openpyxl
 python-docx
+psycopg2
+asyncpg

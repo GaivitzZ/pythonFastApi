@@ -1,12 +1,12 @@
 import base64
+import urllib.parse
 from typing import Optional
 from datetime import datetime
 from io import BytesIO
-import urllib.parse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, EmailStr
 
 from configs.database import get_db
@@ -65,10 +65,6 @@ class UsersUpdate(BaseModel):
     avatar: Optional[str] = None
 
 
-def _get_users_query(db: Session):
-    return db.query(Users).filter(Users.deleted_at == None).order_by(Users.id.desc())
-
-
 def _attachment_header(filename: str) -> str:
     encoded = urllib.parse.quote(filename)
     return f'attachment; filename="{filename}"; filename*=UTF-8\'\'{encoded}'
@@ -85,30 +81,42 @@ def set_cell_border(cell, border_color: str = "CCCCCC") -> None:
         tcPr.append(border_el)
 
 
+async def _get_users(db: AsyncSession):
+    result = await db.execute(
+        select(Users).where(Users.deleted_at == None).order_by(Users.id.desc())
+    )
+    return result.scalars().all()
+
+
+# ====================== LIST / ME ======================
+
 @router.get("/", response_model=list[UsersOut], summary="รายการ users")
-def list_users(
+async def list_users(
     page: Optional[int] = Query(None, ge=1),
     limit: Optional[int] = Query(None, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: Users = Depends(AuthService.get_current_user),
 ):
-    query = _get_users_query(db)
+    stmt = select(Users).where(Users.deleted_at == None).order_by(Users.id.desc())
     if page is not None and limit is not None:
-        query = query.offset((page - 1) * limit).limit(limit)
-    return query.all()
+        stmt = stmt.offset((page - 1) * limit).limit(limit)
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
 @router.get("/me", response_model=UsersOut, summary="ข้อมูล user ของตัวเอง")
-def get_me(current_user: Users = Depends(AuthService.get_current_user)):
+async def get_me(current_user: Users = Depends(AuthService.get_current_user)):
     return current_user
 
 
+# ====================== EXPORTS (streaming download) ======================
+
 @router.get("/export/pdf", summary="Export users เป็น PDF")
-def export_users_pdf(
-    db: Session = Depends(get_db),
+async def export_users_pdf(
+    db: AsyncSession = Depends(get_db),
     current_user: Users = Depends(AuthService.get_current_user),
 ):
-    users = _get_users_query(db).all()
+    users = await _get_users(db)
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -158,19 +166,22 @@ def export_users_pdf(
     doc.build(story)
     buffer.seek(0)
 
+    raw = buffer.read()
     filename = f"users_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return {
-        "filename": filename,
-        "content_type": "application/pdf",
-        "data": base64.b64encode(buffer.read()).decode(),
+        "filename":   filename,
+        "mime_type":  "application/pdf",
+        "base64":     base64.b64encode(raw).decode(),
+        "size":       len(raw),
     }
 
+
 @router.get("/export/excel", summary="Export users เป็น Excel")
-def export_users_excel(
-    db: Session = Depends(get_db),
+async def export_users_excel(
+    db: AsyncSession = Depends(get_db),
     current_user: Users = Depends(AuthService.get_current_user),
 ):
-    users = _get_users_query(db).all()
+    users = await _get_users(db)
 
     wb = Workbook()
     ws = wb.active
@@ -219,20 +230,22 @@ def export_users_excel(
     wb.save(buffer)
     buffer.seek(0)
 
+    raw = buffer.read()
     filename = f"users_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return {
-        "filename": filename,
-        "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "data": base64.b64encode(buffer.read()).decode(),
+        "filename":   filename,
+        "mime_type":  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "base64":     base64.b64encode(raw).decode(),
+        "size":       len(raw),
     }
 
 
 @router.get("/export/word", summary="Export users เป็น Word")
-def export_users_word(
-    db: Session = Depends(get_db),
+async def export_users_word(
+    db: AsyncSession = Depends(get_db),
     current_user: Users = Depends(AuthService.get_current_user),
 ):
-    users = _get_users_query(db).all()
+    users = await _get_users(db)
 
     doc = Document()
     section = doc.sections[0]
@@ -295,121 +308,112 @@ def export_users_word(
     doc.save(buffer)
     buffer.seek(0)
 
+    raw = buffer.read()
     filename = f"users_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.docx"
     return {
-        "filename": filename,
-        "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "data": base64.b64encode(buffer.read()).decode(),
+        "filename":   filename,
+        "mime_type":  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "base64":     base64.b64encode(raw).decode(),
+        "size":       len(raw),
     }
 
+
 # ====================== CRUD ======================
+
 @router.get("/{user_id}", response_model=UsersOut, summary="ดู user ตาม ID")
-def get_user(
+async def get_user(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: Users = Depends(AuthService.get_current_user),
 ):
-    user = db.query(Users).filter(Users.id == user_id, Users.deleted_at == None).first()
+    result = await db.execute(
+        select(Users).where(Users.id == user_id, Users.deleted_at == None)
+    )
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail=f"ไม่พบ user id={user_id}")
     return user
 
 
 @router.post("/", response_model=UsersOut, status_code=status.HTTP_201_CREATED, summary="สร้าง user ใหม่")
-def create_user(
+async def create_user(
     body: UsersCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: Users = Depends(AuthService.get_current_user),
 ):
-    try:
-        if db.query(Users).filter(Users.email == body.email).first():
-            raise HTTPException(status_code=400, detail="Email นี้ถูกใช้งานแล้ว")
+    result = await db.execute(select(Users).where(Users.email == body.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email นี้ถูกใช้งานแล้ว")
 
-        user = Users(
-            name=body.name,
-            user_name=body.user_name,
-            email=body.email,
-            password=AuthService.hash_password(body.password),
-            user_phone=body.user_phone,
-            status=body.status,
-            created_by=current_user.id,
-            created_by_name=current_user.name,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        return user
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    user = Users(
+        name=body.name,
+        user_name=body.user_name,
+        email=body.email,
+        password=AuthService.hash_password(body.password),
+        user_phone=body.user_phone,
+        status=body.status,
+        created_by=current_user.id,
+        created_by_name=current_user.name,
+    )
+    db.add(user)
+    await db.flush()
+    await db.refresh(user)
+    return user
 
 
 @router.put("/{user_id}", response_model=UsersOut, summary="อัปเดต user (PUT)")
-def replace_user(
+async def replace_user(
     user_id: int,
     body: UsersUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: Users = Depends(AuthService.get_current_user),
 ):
-    try:
-        user = db.query(Users).filter(Users.id == user_id, Users.deleted_at == None).first()
-        if not user:
-            raise HTTPException(status_code=404, detail=f"ไม่พบ user id={user_id}")
+    result = await db.execute(
+        select(Users).where(Users.id == user_id, Users.deleted_at == None)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"ไม่พบ user id={user_id}")
 
-        if body.name is not None:       user.name = body.name
-        if body.user_name is not None:  user.user_name = body.user_name
-        if body.user_phone is not None: user.user_phone = body.user_phone
-        if body.email is not None:      user.email = body.email
-        if body.password is not None:   user.password = AuthService.hash_password(body.password)
-        if body.status is not None:     user.status = body.status
-        if body.avatar is not None:     user.avatar = body.avatar
+    if body.name is not None:       user.name = body.name
+    if body.user_name is not None:  user.user_name = body.user_name
+    if body.user_phone is not None: user.user_phone = body.user_phone
+    if body.email is not None:      user.email = body.email
+    if body.password is not None:   user.password = AuthService.hash_password(body.password)
+    if body.status is not None:     user.status = body.status
+    if body.avatar is not None:     user.avatar = body.avatar
 
-        user.updated_by = current_user.id
-        user.updated_by_name = current_user.name
+    user.updated_by = current_user.id
+    user.updated_by_name = current_user.name
 
-        db.commit()
-        db.refresh(user)
-        return user
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    await db.flush()
+    await db.refresh(user)
+    return user
 
 
 @router.patch("/{user_id}", response_model=UsersOut, summary="อัปเดตบางฟิลด์ (PATCH)")
-def update_user(
+async def update_user(
     user_id: int,
     body: UsersUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: Users = Depends(AuthService.get_current_user),
 ):
-    return replace_user(user_id, body, db, current_user)
+    return await replace_user(user_id, body, db, current_user)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_200_OK, summary="ลบ user (hard delete)")
-def delete_user(
+async def delete_user(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: Users = Depends(AuthService.get_current_user),
 ):
-    try:
-        user = db.query(Users).filter(Users.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail=f"ไม่พบ user id={user_id}")
-        if user.id == current_user.id:
-            raise HTTPException(status_code=400, detail="ไม่สามารถลบ user ของตัวเองได้")
+    result = await db.execute(select(Users).where(Users.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"ไม่พบ user id={user_id}")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="ไม่สามารถลบ user ของตัวเองได้")
 
-        db.delete(user)
-        db.commit()
-        return {"message": f"ลบ user id={user_id} สำเร็จ"}
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    await db.delete(user)
+    await db.flush()
+    return {"message": f"ลบ user id={user_id} สำเร็จ"}

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, EmailStr
 
 from configs.database import get_db
 from models.users import Users
-from configs.auth import AuthService   # ตรงนี้ต้อง import ให้ถูก
+from configs.auth import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -28,38 +29,42 @@ class LoginIn(BaseModel):
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED, summary="สมัครสมาชิก")
-def register(body: RegisterIn, db: Session = Depends(get_db)):
-    if db.query(Users).filter(Users.email == body.email).first():
+async def register(body: RegisterIn, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Users).where(Users.email == body.email))
+    if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email หรือ Username นี้ถูกใช้งานแล้ว")
 
-    users = Users(
+    user = Users(
         name=body.name,
         user_name=body.user_name,
         email=body.email,
         password=AuthService.hash_password(body.password),
         status="active",
     )
-    db.add(users)
-    db.commit()
-    db.refresh(users)
-    return {"message": "สมัครสมาชิกสำเร็จ", "user_id": users.id}
+    db.add(user)
+    await db.flush()
+    await db.refresh(user)
+    return {"message": "สมัครสมาชิกสำเร็จ", "user_id": user.id}
 
 
 @router.post("/login", response_model=TokenOut, summary="เข้าสู่ระบบ")
-def login(body: LoginIn, db: Session = Depends(get_db)):
-    user = db.query(Users).filter(
-        Users.user_name  == body.username,
-        Users.deleted_at == None,
-    ).first()
-    
+async def login(body: LoginIn, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Users).where(
+            Users.user_name == body.username,
+            Users.deleted_at == None,
+        )
+    )
+    user = result.scalar_one_or_none()
+
     if not user or not AuthService.verify_password(body.password, user.password):
         raise HTTPException(status_code=401, detail="Username หรือ Password ไม่ถูกต้อง")
 
-    access_token = AuthService.create_access_token(data={'sub': str(user.id)})
-    remember_token = AuthService.save_remember_token(user.id, db)
+    access_token = AuthService.create_access_token(data={"sub": str(user.id)})
+    remember_token = await AuthService.save_remember_token(user.id, db)
 
     return TokenOut(
-        access_token   = access_token,
-        remember_token = remember_token,
-        token_type     = "bearer"
+        access_token=access_token,
+        remember_token=remember_token,
+        token_type="bearer",
     )

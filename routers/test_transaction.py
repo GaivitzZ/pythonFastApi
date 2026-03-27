@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import Optional
 
@@ -15,56 +16,39 @@ class TestTransactionIn(BaseModel):
 
 
 class TestTransactionOut(BaseModel):
-    id: int
-    test_00: str
+    id: Optional[int] = None
+    test_00: Optional[str] = None
     test_01: Optional[str] = None
 
-    class Config:
-        from_attributes = True  # ✅ ต้องมี ไม่งั้น Pydantic แปลง ORM object ไม่ได้ → 500
+    model_config = {"from_attributes": True}
 
 
 @router.get("/", response_model=list[TestTransactionOut])
-def get_all(db: Session = Depends(get_db)):
-    try:
-        db.begin()
-        return db.query(TestTransaction).all()  
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+async def get_all(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(TestTransaction))
+    return result.scalars().all()
 
 
-@router.post("/create", response_model=TestTransactionOut)  
-def create(body: TestTransactionIn, db: Session = Depends(get_db)):
-    try:
-        db.begin()
-        t = TestTransaction(        
-            test_00=body.test_00,
-            test_01=body.test_01
-        )
-        db.add(t)
-        db.commit()
-        db.refresh(t)               
-        return t
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/create", response_model=TestTransactionOut)
+async def create(body: TestTransactionIn, db: AsyncSession = Depends(get_db)):
+    t = TestTransaction(
+        test_00=body.test_00,
+        test_01=body.test_01,
+    )
+    db.add(t)
+    await db.flush()
+    await db.refresh(t)
+    return t
 
 
 @router.put("/update/{id}", response_model=TestTransactionOut)
-def update(id: int, body: TestTransactionIn, db: Session = Depends(get_db)): 
-    try:
-        db.begin()
-        t = db.query(TestTransaction).filter(TestTransaction.id == id).first()  
-        if not t:                   # ✅ เช็คหลัง query ไม่ใช่ก่อน
-            raise HTTPException(status_code=404, detail="not found")
-        t.test_00 = body.test_00
-        t.test_01 = body.test_01
-        db.commit()
-        db.refresh(t)
-        return t
-    except HTTPException:
-        raise                       # ✅ ต้อง re-raise ไม่งั้น HTTPException ถูก catch โดย except Exception
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+async def update(id: int, body: TestTransactionIn, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(TestTransaction).where(TestTransaction.id == id))
+    t = result.scalar_one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail="not found")
+    t.test_00 = body.test_00
+    t.test_01 = body.test_01
+    await db.flush()
+    await db.refresh(t)
+    return t
