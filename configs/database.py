@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://pylab01:P%40ssw0rd%401@10.0.20.34:5432/python_labdb"
     SECRET_KEY: str = "change-this-to-a-random-secret-key"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    CHANNEL_LINE_ACCESS_TOKEN: str = 'HPa3arT8FOe8gZGeQ9ih73lRXw/OUxV35E3XWOVulGkTHnoH50oCZKNffqyMGKsJ//eim3OicEScuLJdveZtXcDzYLteh/hhta2tukNEDzrZOALCX9uLX/rbHVNp25SzkRd84U/LWSBPmPOepoVGPgdB04t89/1O/w1cDnyilFU='
+    CHANNEL_LINE_SECRET: str = 'e724521304c09c3e1b4dadfd9a88ae2b'
 
     class Config:
         env_file = ".env"

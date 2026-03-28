@@ -12,3 +12,5 @@ openpyxl
 python-docx
 psycopg2
 asyncpg
+httpx
+python-socketio

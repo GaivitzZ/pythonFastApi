@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket Test</title>
+</head>
+<body>
+    <h2>Socket.IO Test</h2>
+    <p>Status: <span id="status">Connecting...</span></p>
+    <p>Room: <span id="room">-</span></p>
+    <ul id="messages"></ul>
+</body>
+</html>
+
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+const USER_ID = "U77e6e1be0473ddb1d391238d8ad5c2ff";
+
+const socket = io("http://localhost:8000", {
+    transports: ["websocket"]
+});
+
+socket.on("connect", () => {
+    document.getElementById("status").textContent = "Connected ✅";
+    socket.emit("join", { user_id: USER_ID });
+});
+
+socket.on("joined", (data) => {
+    document.getElementById("room").textContent = data.room;
+});
+
+socket.on("line_message", (data) => {
+    const li = document.createElement("li");
+    li.textContent = JSON.stringify(data);
+    document.getElementById("messages").appendChild(li);
+});
+
+socket.on("disconnect", () => {
+    document.getElementById("status").textContent = "Disconnected ❌";
+});
+</script>
