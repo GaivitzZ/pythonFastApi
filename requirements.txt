@@ -14,3 +14,4 @@ psycopg2
 asyncpg
 httpx
 python-socketio
+line-bot-sdk

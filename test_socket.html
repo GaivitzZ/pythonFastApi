@@ -1,42 +1,53 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Socket Test</title>
+    <title>Chat</title>
 </head>
 <body>
-    <h2>Socket.IO Test</h2>
-    <p>Status: <span id="status">Connecting...</span></p>
-    <p>Room: <span id="room">-</span></p>
-    <ul id="messages"></ul>
-</body>
-</html>
+
+<h2>Chat</h2>
+<div id="chat"></div>
 
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
 <script>
 const USER_ID = "U77e6e1be0473ddb1d391238d8ad5c2ff";
 
-const socket = io("http://localhost:8000", {
-    transports: ["websocket"]
-});
+const socket = io("http://localhost:8000");
 
 socket.on("connect", () => {
-    document.getElementById("status").textContent = "Connected ✅";
-    socket.emit("join", { user_id: USER_ID });
-});
+    console.log("connected");
 
-socket.on("joined", (data) => {
-    document.getElementById("room").textContent = data.room;
+    socket.emit("join", {
+        user_id: USER_ID
+    });
 });
 
 socket.on("line_message", (data) => {
-    const li = document.createElement("li");
-    li.textContent = JSON.stringify(data);
-    document.getElementById("messages").appendChild(li);
-});
+    const div = document.createElement("div");
 
-socket.on("disconnect", () => {
-    document.getElementById("status").textContent = "Disconnected ❌";
+    if (data.type === "text") {
+        div.innerText = data.message;
+    }
+
+    if (data.type === "image") {
+        const img = document.createElement("img");
+        img.src = data.image_url;
+        img.width = 200;
+        div.appendChild(img);
+    }
+
+    if (data.type === "video") {
+        const video = document.createElement("video");
+        video.src = data.video_url;
+        video.controls = true;
+        video.width = 250;
+        div.appendChild(video);
+    }
+
+    document.getElementById("chat").appendChild(div);
 });
 </script>
+
+</body>
+</html>
