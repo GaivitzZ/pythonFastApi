@@ -20,13 +20,16 @@ import asyncio
 import requests
 import os
 import uuid
+import requests
+import httpx 
 
 # 🔑 LINE CONFIG
-CHANNEL_LINE_ACCESS_TOKEN = "HPa3arT8FOe8gZGeQ9ih73lRXw/OUxV35E3XWOVulGkTHnoH50oCZKNffqyMGKsJ//eim3OicEScuLJdveZtXcDzYLteh/hhta2tukNEDzrZOALCX9uLX/rbHVNp25SzkRd84U/LWSBPmPOepoVGPgdB04t89/1O/w1cDnyilFU="
-CHANNEL_LINE_SECRET       = "e724521304c09c3e1b4dadfd9a88ae2b"
+CHANNEL_LINE_ACCESS_TOKEN = "h642GUSxanjVQD9Hh72Oa+muoPK4ZDrjMPwRs836ap1MzL39ndZJy/jOrGDuOb3Na8sBbp1ZLuHSqpurd/FF7IPocrM2F/Z5XW4n//hDkuGyAuzifa3vl1PlnRMSuAqPv53lDht4M00Ine7BvgIZhgdB04t89/1O/w1cDnyilFU="
+CHANNEL_LINE_SECRET       = '9a80fae9519de72bf480ba4e39e652a7'
 
 configuration = Configuration(access_token=CHANNEL_LINE_ACCESS_TOKEN)
 handler       = WebhookHandler(CHANNEL_LINE_SECRET)
+LINE_API_URL = "https://api.line.me/v2/bot"
 
 router = APIRouter(prefix="/test_line_api", tags=["TestLineApi"])
 
@@ -212,3 +215,35 @@ async def send_line(payload: SendRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/get_all_followers")
+async def get_all_followers():
+    all_user_ids = []
+    next_token = None
+    
+    # Use a single client for all requests
+    async with httpx.AsyncClient() as client:
+        while True:
+            params = {"limit": 1000}
+            if next_token:
+                params["start"] = next_token
+
+            res = await client.get(
+                f"{LINE_API_URL}/followers/ids",
+                headers={"Authorization": f"Bearer {CHANNEL_LINE_ACCESS_TOKEN}"},
+                params=params
+            )
+
+            if res.status_code != 200:
+                # Log the actual response to see why it's 403
+                print(f"Error Response: {res.text}") 
+                return {"error": "API Access Denied", "detail": res.json()}
+
+            data = res.json()
+            all_user_ids.extend(data.get("userIds", []))
+            next_token = data.get("next")
+
+            if not next_token:
+                break
+
+    return {"total": len(all_user_ids), "userIds": all_user_ids}

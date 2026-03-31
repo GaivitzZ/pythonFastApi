@@ -8,8 +8,9 @@ from configs.socket import socket_manager, sio   # 👈 ใช้ class manager
 import models.users
 import models.users_notifications
 import models.test_transaction
+from fastapi.middleware.cors import CORSMiddleware
+from routers import auth, users, users_notifications, test_transaction, test_line_api,message_from_api,registration_api
 
-from routers import auth, users, users_notifications, test_transaction, test_line_api
 
 
 # ==========================
@@ -38,6 +39,14 @@ fastapi_app = FastAPI(
     lifespan=lifespan,
 )
 
+fastapi_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # ==========================
 # Register Routers
@@ -47,7 +56,9 @@ routers = [
     users.router,
     users_notifications.router,
     test_transaction.router,
-    test_line_api.router
+    test_line_api.router,
+    message_from_api.router,
+    registration_api.router
 ]
 
 for r in routers:
@@ -78,3 +89,4 @@ app = socketio.ASGIApp(
     sio,
     other_asgi_app=fastapi_app
 )
+
