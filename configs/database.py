@@ -16,15 +16,14 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# ✅ 1. ASYNC DATABASE ENGINE
 engine = create_async_engine(
     settings.DATABASE_URL,
-    pool_size=10,          # จำนวน connection หลัก
-    max_overflow=20,       # connection ที่เพิ่มได้ชั่วคราว
-    pool_timeout=30,       # รอ connection (วินาที)
-    pool_recycle=1800,     # reset connection ทุก 30 นาที
-    pool_pre_ping=True,    # เช็ค connection ก่อนใช้ (กัน connection ตาย)
-    echo=False,
+    pool_size=10,
+    max_overflow=20,
+    pool_timeout=30,
+    pool_recycle=1800,
+    pool_pre_ping=True,
+    echo=True,  # ← เปิด True เพื่อดู SQL query ใน terminal
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -40,20 +39,22 @@ class Base(DeclarativeBase):
     pass
 
 
-# ✅ 2. ASYNC TRANSACTION MANAGEMENT
+# ✅ สร้าง Table อัตโนมัติตอน startup
+async def create_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("✅ Tables ready")
+
+
 async def get_db():
     async with AsyncSessionLocal() as db:
         try:
-            print("⏳ Waiting for transaction...")
             yield db
-            print("💾 Trying COMMIT...")
             await db.commit()
             print("✅ COMMITTED")
         except Exception as e:
-            print("🚨 ERROR OCCURRED:", str(e))
-            print("↩️ Rolling back...")
+            print("🚨 ERROR:", str(e))
             await db.rollback()
             raise
         finally:
-            print("🔚 Closing DB session")
             await db.close()
