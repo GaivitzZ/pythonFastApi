@@ -7,7 +7,7 @@ from typing import Optional
 from configs.database import get_db
 from models.test_transaction import TestTransaction
 
-router = APIRouter(prefix="/test_transaction", tags=["TestTransaction"])
+router = APIRouter(prefix="/api/test_transaction", tags=["TestTransaction"])
 
 
 class TestTransactionIn(BaseModel):

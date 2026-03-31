@@ -30,7 +30,7 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
-router = APIRouter(prefix="/users-notifications", tags=["UsersNotifications"])
+router = APIRouter(prefix="/api/users_notifications", tags=["UsersNotifications"])
 
 
 # ====================== SCHEMAS ======================

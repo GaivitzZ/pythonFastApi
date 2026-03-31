@@ -7,7 +7,7 @@ from configs.database import get_db
 from models.users import Users
 from configs.auth import AuthService
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 
 class RegisterIn(BaseModel):

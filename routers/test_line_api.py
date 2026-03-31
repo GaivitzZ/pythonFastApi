@@ -31,7 +31,7 @@ configuration = Configuration(access_token=CHANNEL_LINE_ACCESS_TOKEN)
 handler       = WebhookHandler(CHANNEL_LINE_SECRET)
 LINE_API_URL = "https://api.line.me/v2/bot"
 
-router = APIRouter(prefix="/test_line_api", tags=["TestLineApi"])
+router = APIRouter(prefix="/api/test_line_api", tags=["TestLineApi"])
 
 # 📁 upload folder
 UPLOAD_DIR = "static/uploads"

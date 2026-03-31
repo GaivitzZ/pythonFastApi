@@ -26,7 +26,7 @@ sio = socketio.AsyncServer(cors_allowed_origins="*", async_mode="asgi")
 app = FastAPI()
 app.mount("/socket.io", socketio.ASGIApp(sio))
 
-router = APIRouter(prefix="/line", tags=["LINE"])
+router = APIRouter(prefix="/api/line", tags=["LINE"])
 
 # ================= CONFIG =================
 LINE_CHANNEL_SECRET = "9a80fae9519de72bf480ba4e39e652a7"

@@ -28,7 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-router = APIRouter(prefix="/line", tags=["LINE"])
+router = APIRouter(prefix="/api/line", tags=["LINE"])
 
 LINE_CHANNEL_ACCESS_TOKEN = "h642GUSxanjVQD9Hh72Oa+muoPK4ZDrjMPwRs836ap1MzL39ndZJy/jOrGDuOb3Na8sBbp1ZLuHSqpurd/FF7IPocrM2F/Z5XW4n//hDkuGyAuzifa3vl1PlnRMSuAqPv53lDht4M00Ine7BvgIZhgdB04t89/1O/w1cDnyilFU="
 
